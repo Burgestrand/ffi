@@ -2,6 +2,9 @@ ruby-ffi
     by Wayne Meissner
     http://wiki.github.com/ffi/ffi
 
+== FORK DESCRIPTION:
+I forked to add YARD documentation to the code.
+
 == DESCRIPTION:
 
 Ruby-FFI is a ruby extension for programmatically loading dynamic
