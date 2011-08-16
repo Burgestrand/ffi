@@ -22,6 +22,7 @@
 
 require 'ffi/platform'
 require 'ffi/struct_layout_builder'
+require 'forwardable'
 
 module FFI
 
@@ -36,7 +37,7 @@ module FFI
     end
 
     class Enum < Field
-      
+
       def get(ptr)
         type.find(ptr.get_int(offset))
       end
@@ -73,101 +74,11 @@ module FFI
     end
   end
 
-  
+
   class Struct
-
-    def size
-      self.class.size
-    end
-
-    def alignment
-      self.class.alignment
-    end
-    alias_method :align, :alignment
-
-    def offset_of(name)
-      self.class.offset_of(name)
-    end
-
-    def members
-      self.class.members
-    end
-
-    def values
-      members.map { |m| self[m] }
-    end
-
-    def offsets
-      self.class.offsets
-    end
-
-    def clear
-      pointer.clear
-      self
-    end
-
-    def to_ptr
-      pointer
-    end
-
-    def self.size
-      defined?(@layout) ? @layout.size : defined?(@size) ? @size : 0
-    end
-
-    def self.size=(size)
-      raise ArgumentError, "Size already set" if defined?(@size) || defined?(@layout)
-      @size = size
-    end
-
-    def self.alignment
-      @layout.alignment
-    end
-
-    def self.align
-      @layout.alignment
-    end
-
-    def self.members
-      @layout.members
-    end
-
-    def self.offsets
-      @layout.offsets
-    end
-
-    def self.offset_of(name)
-      @layout.offset_of(name)
-    end
-
-    def self.in
-      ptr(:in)
-    end
-
-    def self.out
-      ptr(:out)
-    end
-
-    def self.ptr(flags = :inout)
-      @ref_data_type ||= Type::Mapped.new(StructByReference.new(self))
-    end
-
-    def self.val
-      @val_data_type ||= StructByValue.new(self)
-    end
-
-    def self.by_value
-      self.val
-    end
-
-    def self.by_ref(flags = :inout)
-      self.ptr(flags)
-    end
-
     class ManagedStructConverter < StructByReference
-
       def initialize(struct_class)
         super(struct_class)
-
         raise NoMethodError, "release() not implemented for class #{struct_class}" unless struct_class.respond_to? :release
         @method = struct_class.method(:release)
       end
@@ -177,16 +88,45 @@ module FFI
       end
     end
 
-    def self.auto_ptr
-      @managed_type ||= Type::Mapped.new(ManagedStructConverter.new(self))
-    end
-
-
     class << self
-      public
+      extend Forwardable
+
+      def size
+        defined?(@layout) ? @layout.size : defined?(@size) ? @size : 0
+      end
+
+      def size=(size)
+        raise ArgumentError, "Size already set" if defined?(@size) || defined?(@layout)
+        @size = size
+      end
+
+      def_delegators :@layout, :alignment, :members, :offsets, :offset_of
+      def_delegator :self, :align, :alignment
+      def_delegator :self, :val, :by_value
+      def_delegator :self, :ptr, :by_ref
+
+      def in
+        ptr(:in)
+      end
+
+      def out
+        ptr(:out)
+      end
+
+      def ptr(flags = :inout)
+        @ref_data_type ||= Type::Mapped.new(StructByReference.new(self))
+      end
+
+      def val
+        @val_data_type ||= StructByValue.new(self)
+      end
+
+      def auto_ptr
+        @managed_type ||= Type::Mapped.new(ManagedStructConverter.new(self))
+      end
 
       def layout(*spec)
-#        raise RuntimeError, "struct layout already defined for #{self.inspect}" if defined?(@layout)
+        # raise RuntimeError, "struct layout already defined for #{self.inspect}" if defined?(@layout)
         return @layout if spec.size == 0
 
         builder = StructLayoutBuilder.new
@@ -206,7 +146,6 @@ module FFI
         return cspec
       end
 
-
       protected
 
       def callback(params, ret)
@@ -218,7 +157,7 @@ module FFI
         @packed = packed
       end
       alias :pack :packed
-      
+
       def aligned(alignment = 1)
         @min_alignment = alignment
       end
@@ -232,7 +171,6 @@ module FFI
           nil
         end
       end
-
 
       def find_field_type(type, mod = enclosing_module)
         if type.kind_of?(Class) && type < Struct
@@ -281,6 +219,22 @@ module FFI
           builder.add name, find_field_type(type), offset
         end
       end
+    end
+
+    extend Forwardable
+    def_delegators 'self.class', :size, :alignment, :align, :offset_of, :members, :offsets
+
+    def values
+      members.map { |m| self[m] }
+    end
+
+    def clear
+      pointer.clear
+      self
+    end
+
+    def to_ptr
+      pointer
     end
   end
 end
